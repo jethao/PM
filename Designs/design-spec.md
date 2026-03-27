@@ -3,9 +3,9 @@
 ## 1. Overview
 
 - Feature name: AirHealth connected breath analysis experience
-- Design objective: Define a Figma-ready product experience for pairing, feature-card task selection, guided breath measurement, results review, progress tracking, entitlement states, low-power behavior, support-directory access, and platform sharing across the two approved modes.
-- Source inputs used: Approved PRD in `PM/PRD/PRD.md`, feature definition in `PM/Designs/feature.md`
-- Summary of the user experience being designed: A user pairs a handheld breath-analysis device to a mobile app, selects one of two modes, follows guided measurement instructions, reviews a normalized result and progress over time, and manages trial/subscription and sharing states when applicable.
+- Design objective: Define a Figma-ready product experience for pairing, feature-card task selection, guided breath measurement, results review, progress tracking, entitlement states, low-power behavior, support-directory access, manufacturing verification, and platform sharing across the two approved modes.
+- Source inputs used: Approved PRD in `PM/PRD/PRD.md`, feature definition in `PM/Designs/feature.md` (2026-03-27 update)
+- Summary of the user experience being designed: A user pairs a handheld breath-analysis device to a mobile app, selects one of two modes, follows guided measurement instructions, reviews a normalized result and progress over time, and manages trial/subscription and sharing states when applicable. Separate internal surfaces support Factory verification and HW-ID-based routing without exposing those details to consumers.
 
 ## 2. Inputs and Alignment
 
@@ -22,6 +22,9 @@
 - The home screen presents each feature as a task hub with `set goals`, `view history`, `measure`, `get suggestion`, and `consult professionals`.
 - `consult professionals` is a Phase 1 external educational and support directory for both features.
 - The device enters low-power mode only after 3 consecutive seconds below the 1% idle threshold and exits low-power mode only after explicit user/app action or 2 consecutive seconds above the exit threshold.
+- The product also includes a 3-color LED for device-state feedback.
+- Factory mode exists for manufacturing and QA, is one-time use, and is not exposed to consumer UX.
+- HW-ID is internal routing metadata for manufacturing, backend, analytics, and support, and must not surface in consumer UX.
 
 ### Relevant inputs from `PM/Designs/feature.md`
 
@@ -45,6 +48,7 @@
 - The handheld industrial design will likely use a fixed mouth-contact or air-intake region rather than a complex mechanical assembly, unless later engineering validation proves a removable hygienic part is required.
 - If a removable hygienic part is introduced later, it should be passive and user-replaceable, not a moving or actuated mechanism.
 - The feature-card action row is visible on the feature detail surface and may also be pinned on Home when space allows, but the same action vocabulary must remain consistent in both places.
+- Factory verification will likely use a separate internal tool or service surface rather than the consumer app, even though the underlying device hardware is shared.
 
 ### Unresolved ambiguities that affect design
 
@@ -53,6 +57,8 @@
 - The PRD defines export payload fields, but partner-specific UI permissions and copy still need final legal/privacy review before release.
 - The PRD intentionally leaves open whether the handheld air path needs a removable hygienic insert or disposable accessory.
 - The PRD defines the support-directory behavior, but the exact content source, taxonomy, and locale coverage of the curated directory still need operational definition.
+- The PRD defines HW-ID as internal routing metadata, but the exact values, taxonomy, and owning service remain implementation decisions.
+- The PRD does not prescribe the final consumer LED mapping outside Factory mode, so consumer LED semantics may need a later hardware/state spec update.
 
 ## 3. Experience Architecture
 
@@ -65,6 +71,7 @@
 - Goals setup and edit
 - Suggestion request and response
 - Consult professionals directory
+- Factory verification console
 - Subscription/paywall surfaces
 - Sharing settings
 
@@ -77,6 +84,7 @@
 - Perform Fat Burning measurement
 - Review results and progress
 - Open `consult professionals` and hand off to an external resource
+- Run factory verification and capture pass/fail logs
 - Handle trial, entitlement, and read-only states
 - Enter and exit low-power readiness without losing context
 - Share completed sessions to Apple Health or Health Connect
@@ -93,6 +101,7 @@
 - History detail and trend screen
 - Suggestion surface
 - Consult professionals directory and external handoff notice
+- Factory verification screen and BLE log viewer
 - Subscription state screen
 - Sharing permissions and export summary screen
 - Error and recovery dialogs
@@ -106,6 +115,8 @@
 - The app is also authoritative for the feature-card action hub and for disabling conflicting actions while one action is active.
 - The device enclosure and sample path must make the handheld experience feel stable and obvious, while still protecting sensor accuracy through airflow conditioning.
 - The device firmware is authoritative for low-power entry and exit, while the app must communicate that state without implying failure.
+- Factory verification is authoritative on the device and internal tooling, and it may bypass consumer sign-in while still writing logs to authorized systems.
+- The 3-color LED is secondary for consumer use but primary for factory pass/fail and in-progress verification states.
 
 ### Critical system states
 
@@ -116,6 +127,11 @@
 - Active session
 - Measuring
 - Low power
+- Factory mode
+- Factory check running
+- Factory pass
+- Factory fail
+- Factory locked
 - Complete
 - Canceled
 - Failed
@@ -136,6 +152,11 @@
 - Measuring to failed after disconnect, invalid sample, or sensor issue
 - Ready to low power after the firmware idle threshold is met
 - Low power to ready after explicit wake or above-threshold sensor activity
+- Powered on to factory check running after a 10-second factory long-press by authorized tooling
+- Factory check running to factory pass when the hardware check completes without error
+- Factory check running to factory fail when the hardware check reports one or more errors
+- Factory pass or factory fail to factory locked after provisioning is complete
+- Factory locked to powered off after the exit long-press or equivalent shutdown step
 - Trial active or paid active to expired/read-only after entitlement lapses
 - Temporary access to read-only mode after the cached entitlement window becomes stale
 - Handheld setup to measurement-ready after the user powers on the device, grips it naturally, and the app confirms the form factor is ready for a guided session
@@ -159,7 +180,24 @@
 - Alternate paths: Permission denied, device not found, wrong device, pairing timeout.
 - Recovery paths: Retry discovery, re-request permission, go back to pairing, or defer setup and continue as read-only if entitlement state requires it.
 
-### Flow 2: Feature-card task hub
+### Flow 2: Manufacturing verification
+
+- User goal: Verify the device hardware, capture logs, and confirm pass/fail before consumer shipment.
+- Preconditions: Authorized factory operator or QA technician, unprovisioned or factory-eligible device, BLE capture tooling available.
+- Trigger: 10-second hardware long-press or manufacturing tooling command.
+- Steps in sequence:
+  1. Authorized personnel initiate Factory mode on the device.
+  2. Device enters factory check running state and turns the 3-color LED orange.
+  3. Firmware runs the one-time hardware functionality check and emits BLE logs.
+  4. Device turns LED green on pass or red on fail.
+  5. Factory tooling records the result and associated HW-ID metadata.
+  6. Device exits to locked state and does not allow re-entry after provisioning.
+- Expected system responses: The hardware check completes once per device, logs are available over BLE, and the consumer app is not involved.
+- Exit states: Factory pass, factory fail, factory locked.
+- Alternate paths: BLE log transfer interrupted, long-press not recognized, already provisioned device, missing HW-ID mapping.
+- Recovery paths: Retry log capture if the device remains in factory check state, or quarantine the unit for manual triage if the device is already locked or failed.
+
+### Flow 3: Feature-card task hub
 
 - User goal: Choose the right next action from a feature without navigating through unrelated settings.
 - Preconditions: Paired device or accessible read-only history state, Home visible, at least one feature card available.
@@ -174,7 +212,7 @@
 - Alternate paths: Read-only mode, temporary access, disconnected device, active session already in progress.
 - Recovery paths: Refresh device status, return to Home, or choose a non-blocked action.
 
-### Flow 3: Oral & Dental Health measurement
+### Flow 4: Oral & Dental Health measurement
 
 - User goal: Capture a single oral session and understand the result relative to baseline.
 - Preconditions: Paired device, oral mode selected, device ready, user has an eligible entitlement state.
@@ -191,7 +229,7 @@
 - Alternate paths: User stops early, device disconnects, sensor error, cached entitlement blocks a new start.
 - Recovery paths: Retry after error, reconnect device, or resume as read-only if the session cannot start.
 
-### Flow 4: Fat Burning measurement
+### Flow 5: Fat Burning measurement
 
 - User goal: Capture repeated readings in one session and see whether progress is moving toward a target.
 - Preconditions: Paired device, fat mode selected, device ready, valid entitlement state.
@@ -208,7 +246,7 @@
 - Alternate paths: User ends early, device disconnects, sample invalid, or target not set.
 - Recovery paths: Reconnect and retry if the session has not been finalized, or return to Home if the session is lost.
 
-### Flow 5: Consult professionals
+### Flow 6: Consult professionals
 
 - User goal: Find relevant external educational or professional support resources without leaving the product confused about what will be shared.
 - Preconditions: User is on a feature card, result screen, or history detail screen; no conflicting action is active.
@@ -223,7 +261,7 @@
 - Alternate paths: Read-only mode, temporary access, missing locale-specific content, blocked because another action is already active.
 - Recovery paths: Return to the feature hub, retry with another resource, or open generic non-localized support content if no localized match exists.
 
-### Flow 6: Trial, entitlement, and read-only behavior
+### Flow 7: Trial, entitlement, and read-only behavior
 
 - User goal: Understand whether they can measure now, view history, or only review past data.
 - Preconditions: Account exists and the app can verify or cache entitlement state.
@@ -239,7 +277,7 @@
 - Alternate paths: Backend unavailable, offline launch, expired subscription, payment issue.
 - Recovery paths: Refresh entitlement, sign in again, or restore paid status.
 
-### Flow 7: Share completed session summary
+### Flow 8: Share completed session summary
 
 - User goal: Export a completed result to Apple Health or Health Connect.
 - Preconditions: Session is complete, destination permission is granted or requestable.
@@ -254,7 +292,7 @@
 - Alternate paths: Unsupported platform, partial permission, sync pending.
 - Recovery paths: Retry export, return to sharing settings, or dismiss without losing the local result.
 
-### Flow 8: Low-power readiness and wake
+### Flow 9: Low-power readiness and wake
 
 - User goal: Understand that the device is idle but still healthy, and resume quickly without losing context.
 - Preconditions: Device paired, no measurement transition in flight, sensor readings effectively idle.
@@ -282,6 +320,17 @@
 - Dependencies: Account and entitlement state may change what is shown.
 - Accessibility considerations: Large primary button, plain-language copy, and no reliance on color alone.
 
+### Factory verification console
+
+- Purpose: Let authorized manufacturing and QA users run the one-time hardware check and capture pass/fail evidence without consumer UI.
+- Content requirements: Device provisioning status, factory start control, live hardware-check status, 3-color LED state legend, BLE log capture panel, HW-ID routing metadata, pass/fail summary.
+- Controls and actions: Start check, copy logs, retry capture, mark for quarantine, exit factory.
+- Information hierarchy: Device identity and provisioning state first, check state second, logs and routing metadata third.
+- User feedback: Orange while checking, green on pass, red on fail, with the BLE log stream clearly associated to the same device instance.
+- State behavior: The console must be unavailable to consumer accounts and hidden from consumer app navigation.
+- Dependencies: Factory tooling, BLE logging path, provisioning state, HW-ID mapping service.
+- Accessibility considerations: High-contrast pass/fail states and text labels for the LED colors.
+
 ### Pairing screen
 
 - Purpose: Find the device and establish BLE connection.
@@ -303,6 +352,7 @@
 - State behavior: Home must reflect ready, disconnected, low-power-ready, temporary access, and read-only states without ambiguity.
 - Dependencies: Device state, entitlement state, cached history.
 - Accessibility considerations: Clear labels for disabled actions and focus order that follows task priority.
+- LED behavior: Any consumer-facing LED cue should be redundant to the app; the app copy should not require the user to infer meaning from color alone.
 
 ### Mode selection and goal setup
 
@@ -370,6 +420,17 @@
 - Dependencies: Platform permissions and supported destination schema.
 - Accessibility considerations: Use simple language for data-sharing disclosure.
 
+### Factory verification screen
+
+- Purpose: Display the status of a one-time hardware check and log transfer for internal manufacturing or QA use.
+- Content requirements: Check progress, pass/fail status, 3-color LED legend, BLE log capture state, HW-ID routing metadata, provisioning lock status.
+- Controls and actions: Start check, stop capture, export logs, quarantine unit, lock device.
+- Information hierarchy: Pass/fail result first, logs and routing metadata second, maintenance actions third.
+- User feedback: Orange during checking, green on pass, red on fail, with the BLE log state visibly tied to the device under test.
+- State behavior: The screen must not be reachable from consumer app navigation and must disappear once the device is factory-locked.
+- Dependencies: Factory provisioning, BLE logs, HW-ID mapping, internal operator credentials.
+- Accessibility considerations: Text labels for every status color and no reliance on color alone.
+
 ### Consult professionals directory
 
 - Purpose: Provide a safe, clearly external support directory that helps users find relevant educational and professional resources by feature.
@@ -380,6 +441,17 @@
 - State behavior: Available in trial active, paid active, temporary access, and read-only states; disabled during active measurement or any conflicting in-progress action.
 - Dependencies: Feature context, locale availability, external destination health.
 - Accessibility considerations: Resources must be scannable, with link purpose clearly labeled for screen readers.
+
+### HW-ID routing and logs
+
+- Purpose: Let internal systems associate results and factory logs with the correct hardware profile and detected VOC type.
+- Content requirements: Internal HW-ID value, supported hardware profile, routing destination, factory log association, and any status that indicates the mapping is available.
+- Controls and actions: None for consumers; internal tooling may copy, export, or filter by HW-ID.
+- Information hierarchy: Hidden from consumer UI; exposed only in authorized internal tools.
+- User feedback: None in consumer surfaces; internal tools should show a clear error if the HW-ID mapping is missing or inconsistent.
+- State behavior: HW-ID never changes consumer measurement behavior, but it may affect manufacturing, backend, analytics, and support grouping.
+- Dependencies: Firmware, backend mapping table, manufacturing tooling, analytics pipelines, support tooling.
+- Accessibility considerations: Internal tooling should label HW-ID with a human-readable hardware profile name as well as the raw key.
 
 ## 6. States and Conditions
 
@@ -393,6 +465,11 @@
 - Feature action in progress: The chosen action owns the UI and the rest of the feature actions are disabled.
 - Measuring oral: The app shows oral instructions and progress.
 - Measuring fat: The app shows the repeated-reading coach and current/best delta.
+- Factory check running: Internal tooling shows orange LED and logs in progress.
+- Factory pass: Internal tooling shows green LED and a successful hardware-check result.
+- Factory fail: Internal tooling shows red LED and a failed hardware-check result.
+
+Factory-related states are internal-only and must not appear in consumer-facing screens, settings, or exports.
 
 ### Loading states
 
@@ -401,6 +478,7 @@
 - Cloud sync after session completion
 - Export to health platforms
 - Low-power wake handshake
+- BLE log capture during factory verification
 
 ### Connected and disconnected states
 
@@ -413,6 +491,9 @@
 - Baseline established
 - Export succeeded
 - Subscription restored
+- Factory pass
+- Factory fail
+- Factory locked
 
 ### Warning states
 
@@ -420,6 +501,7 @@
 - Low-power ready
 - Battery low before session start
 - Goal not set
+- Factory mode in progress
 
 ### Error states
 
@@ -430,6 +512,9 @@
 - Export failed
 - External support resource unavailable
 - Entitlement unavailable
+- Factory log capture failed
+- Factory check failed
+- HW-ID mapping missing
 
 ### Recovery states
 
@@ -438,6 +523,9 @@
 - Retry export
 - Wake from low power
 - Refresh entitlement
+- Retry BLE log capture
+- Quarantine unit
+- Retry factory log capture
 
 ### Unsupported states
 
@@ -462,6 +550,12 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Unavailable hardware: If the required sensor set is unavailable or reports failure, block the mode and preserve history access.
 - Low-power chatter risk: Use the hysteresis rule so the UI does not flicker between ready and low-power-ready when readings hover near the threshold.
 - External support outage: If a professional-support destination fails to open, keep the user in AirHealth and offer another resource rather than dropping them into a dead-end state.
+- Factory lockout issue: If a unit fails provisioning or remains factory-eligible after shipment, consumer UX must still hide Factory mode and surface only a supportable device error path.
+- HW-ID mismatch: If the internal HW-ID cannot be mapped, internal tooling should flag the record without changing consumer measurement flows.
+- 3-color LED ambiguity: If the LED disagrees with the app on a consumer device, the app copy must win and the LED should be treated as secondary until synchronized.
+- Factory LED/log mismatch: If factory LEDs and BLE logs disagree, internal tooling should prioritize the captured log result for triage and mark the unit for quarantine.
+- Factory re-entry attempt: If an already provisioned unit receives the long-press gesture, the device must remain out of Factory mode and route only to internal supportable failure handling.
+- Missing HW-ID on a factory record: The record should remain visible to internal tooling for follow-up, but it must not affect consumer setup, measurement, or history access.
 - Timeout and retry behavior: Offer one explicit retry path before returning to Home.
 - State mismatch between app and device: Treat the device as authoritative for live session result, and the app as authoritative for UI recovery and queued sync.
 
@@ -471,15 +565,43 @@ For each state, the UI must show what happened, what is blocked, and the next re
 
 - Objective: Define the physical product experience so the device is comfortable to hold, simple to manufacture, and able to produce stable samples for both modes.
 - User value: The user can hold and use the device naturally without managing a complex mechanical assembly or wondering whether breath placement will affect measurement quality.
-- Design scope: Industrial design, enclosure geometry, mouth-contact region, airflow path, button placement, and any visible indicator surfaces that support the handheld experience.
+- Design scope: Industrial design, enclosure geometry, mouth-contact region, airflow path, button placement, LED placement, and any visible indicator surfaces that support the handheld experience.
 - Relevant PRD requirements: Handheld form factor, minimal mechanical parts, airflow stabilization before the sensors, no direct breath impact on sensors, $199 retail target.
-- Hardware touchpoints: Device shell, grip area, power button, mouth-contact region, internal sample-conditioning path, sensor chamber.
+- Hardware touchpoints: Device shell, grip area, power button, mouth-contact region, 3-color LED, internal sample-conditioning path, sensor chamber.
 - Software touchpoints: Device readiness state, low-power-ready state, measurement start instructions, live measurement progress, error messaging when airflow or warm-up is not ready.
-- Interaction spec: The design should make the user path obvious: hold, power on, follow the app, place mouth or blow into the intake region, and rely on the device to condition airflow before sensing. No flow should require the user to manipulate internal parts.
-- State and behavior spec: The device should feel ready when handheld, visibly state when it is measuring or warming up, and clearly reflect when a sample is invalid because the breath path or readiness state is not within spec. The intake orientation should be visually and tactilely obvious so the user does not aim breath directly at exposed sensors.
-- Edge cases: Grip instability, blocked airflow inlet, wet or obstructed mouth-contact area, sensor warm-up delay, sample inconsistency caused by direct breath impingement, passive hygienic accessory not seated if one is introduced later.
+- Interaction spec: The design should make the user path obvious: hold, power on, follow the app, place mouth or blow into the intake region, and rely on the device to condition airflow before sensing. No flow should require the user to manipulate internal parts. The LED should provide redundant state feedback rather than forcing the user to infer meaning from color alone.
+- State and behavior spec: The device should feel ready when handheld, visibly state when it is measuring or warming up, and clearly reflect when a sample is invalid because the breath path or readiness state is not within spec. The intake orientation should be visually and tactilely obvious so the user does not aim breath directly at exposed sensors. Factory mode LED behavior must be orange during check, green on pass, and red on fail.
+- Edge cases: Grip instability, blocked airflow inlet, wet or obstructed mouth-contact area, sensor warm-up delay, sample inconsistency caused by direct breath impingement, passive hygienic accessory not seated if one is introduced later, consumer-device LED mismatch, factory-mode misuse attempt.
 - Acceptance criteria: The user can hold the device comfortably during the full measurement flow, the measurement path is understandable without exposing sensors directly, and the design does not depend on moving parts to guide breath into the sensors.
-- Success metrics: Handheld setup comprehension, measurement initiation success, airflow-related failure rate, low-power wake comprehension, user comfort feedback, and reduction in support contacts related to device handling.
+- Success metrics: Handheld setup comprehension, measurement initiation success, airflow-related failure rate, low-power wake comprehension, user comfort feedback, reduction in support contacts related to device handling, and successful recognition of factory LED pass/fail behavior in internal validation.
+
+### Factory mode
+
+- Objective: Provide a controlled one-time manufacturing and QA flow for open-box verification and hardware triage.
+- User value: Authorized factory and QA users can verify a unit, capture logs, and confirm whether the device is ready before shipment.
+- Design scope: Internal factory start/exit flow, pass/fail indication, BLE log capture, quarantine/lockout behavior, and no consumer exposure.
+- Relevant PRD requirements: Manufacturing-only Factory mode, 10-second long-press entry/exit, 3-color LED orange/green/red behavior, BLE error logs, one-time use, factory lockout, no consumer UI exposure.
+- Hardware touchpoints: Button long-press, 3-color LED, BLE log transport, provisioning lock, HW-ID metadata.
+- Software touchpoints: Internal factory console, log viewer, support/manufacturing tooling, quarantine status, lockout state.
+- Interaction spec: The internal factory surface should show a single explicit start action, a visible in-progress state, a pass/fail outcome, and a lockout indicator after provisioning. The consumer app must never present this flow, and any consumer-facing support messaging should stop at a generic device-failure explanation rather than exposing factory controls.
+- State and behavior spec: The device accepts a 10-second long-press into Factory mode only before consumer provisioning, runs exactly one check, emits BLE logs, and then becomes factory-locked. Orange indicates the check is running, green indicates pass, and red indicates fail. After provisioning, the same long-press must not re-open Factory mode.
+- Edge cases: Long-press not recognized, BLE log transfer interrupted, unit already factory-locked, hardware failure during check, factory operator disconnect, mismatch between LED and log result, HW-ID missing from a factory record.
+- Acceptance criteria: Internal users can start a factory check once, see a pass/fail result, capture BLE logs, and confirm the unit is locked out from re-entry after provisioning. Consumer surfaces never reveal Factory entry, Factory status, or manufacturing logs.
+- Success metrics: Factory pass/fail capture rate, BLE log capture success rate, time-to-triage for failed units, percentage of units successfully locked before consumer shipment, and zero consumer exposure incidents for Factory controls.
+
+### HW-ID routing and logs
+
+- Objective: Define how internal hardware identifiers support manufacturing, analytics, backend routing, and support workflows without becoming a consumer feature.
+- User value: Internal teams can group logs and results by hardware profile and detected VOC type while consumers see a single consistent product experience.
+- Design scope: Internal routing labels, support/manufacturing views, log metadata display, and error states when mapping is missing.
+- Relevant PRD requirements: HW-ID is internal-only, not consumer-facing, and is used to route outputs by supported hardware profile and detected VOC type.
+- Hardware touchpoints: Firmware metadata emission, BLE logs, backend mapping table.
+- Software touchpoints: Manufacturing console, analytics pipelines, support tools, backend ingestion.
+- Interaction spec: HW-ID should only appear in internal tools and be shown alongside a readable hardware profile name. The consumer app must not ask for it, display it, or require it to complete any consumer flow.
+- State and behavior spec: If HW-ID is missing or unmapped, internal systems should flag the record and keep consumer measurement flows unchanged.
+- Edge cases: Unsupported HW-ID, detected VOC profile mismatch, log association failure, support lookup by the wrong device variant.
+- Acceptance criteria: Internal tooling can associate a factory log or completed session with the correct hardware profile, and consumers never see HW-ID in UI. The same HW-ID should not change the consumer action model or the on-device measurement flow.
+- Success metrics: HW-ID routing coverage, mapping success rate, support-case resolution time by hardware profile, and zero consumer-surface leakage of HW-ID values.
 
 ### Feature action hub
 
@@ -591,6 +713,9 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - The `consult professionals` flow is clearly labeled as an external support directory and never implies in-app booking or data sharing.
 - Low-power-ready is visually distinct from disconnected or failed states, and wake transitions do not flicker or strand the user.
 - Completed session sharing excludes raw sensor data, purchase recommendations, and account identifiers.
+- Factory mode is only available through authorized internal tooling before consumer provisioning, and the consumer app never exposes Factory entry, Factory logs, or Factory lockout controls.
+- The 3-color LED behavior is documented clearly enough that internal factory users can interpret orange, green, and red states without relying on consumer copy.
+- HW-ID remains internal-only and never appears in consumer screens, settings, share flows, or exported summaries.
 - The design uses the same core layout and status grammar across all states so Figma variants can be built efficiently.
 
 ## 10. Success Metrics
@@ -606,6 +731,10 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Entitlement comprehension rate, measured by users correctly identifying whether they can measure now.
 - Low-power wake success rate within the first attempt.
 - Sharing success rate on supported platforms.
+- Factory pass/fail capture rate before shipment.
+- BLE log capture success rate during Factory mode.
+- HW-ID routing coverage across manufacturing, backend, analytics, and support workflows.
+- Support-case resolution time by hardware profile.
 - Support contact rate for subscription and blocked-access confusion.
 
 ## 11. Figma Implementation Guidance
@@ -625,6 +754,8 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Error and recovery states
 - Device industrial design exploration
 - Handheld airflow-path variants
+- Factory verification
+- Internal HW-ID routing and support
 
 ### States that require separate screens or variants
 
@@ -635,6 +766,8 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Permission granted, permission denied
 - Export success, export failure
 - External support handoff notice and external-resource-unavailable
+- Factory mode in progress, Factory pass, Factory fail, Factory locked
+- HW-ID mapping missing, HW-ID lookup available
 
 ### Components likely needed
 
@@ -655,6 +788,10 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Device shell views
 - Mouth-contact / airflow-path callouts
 - Indicator light states
+- Factory status banner
+- LED legend
+- BLE log capture panel
+- HW-ID routing chip or badge
 - Cross-section / cutaway annotations
 
 ### Reusable patterns
@@ -673,6 +810,8 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Which states are read-only
 - Which copy is platform specific
 - Which parts of the breath path are fixed, passive, or user-replaceable
+- Which screens are consumer-facing versus internal-only
+- Where Factory logs and HW-ID values may appear in authorized tooling
 
 ### Prototyping needs
 
@@ -684,6 +823,8 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Consult professionals directory to external handoff
 - Expired entitlement to read-only mode transition
 - Share permission grant and failure paths
+- Factory long-press entry, check, pass/fail, and lockout transitions
+- Internal HW-ID lookup and factory log review
 
 ### Open questions before final Figma production
 
@@ -693,6 +834,8 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Final taxonomy and sourcing rules for the curated professional-support directory
 - Final copy for low-power-ready and wake messaging
 - Whether any device indicator beyond power state will ship in Phase 1
+- Final owner and schema for HW-ID routing tables and factory log storage
+- Whether the internal factory console is a standalone tool or embedded support surface
 
 ## 12. Open Questions and Design Risks
 
@@ -703,4 +846,7 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - The new feature-card action hub increases Home-screen complexity and will need careful visual prioritization to avoid choice overload.
 - The support-directory experience depends on content operations and external links staying fresh enough to remain trustworthy.
 - Low-power-ready messaging must stay distinct from disconnect or failure states, or users may misread a healthy idle device as broken.
+- Factory mode exposure must be blocked consistently across provisioning, support, and shipped-device states, or a consumer could see internal-only controls.
+- HW-ID taxonomy drift could fragment manufacturing, analytics, and support records if the routing table is not owned and versioned carefully.
+- If the LED and app disagree during Factory mode, internal operators may misread the unit's status unless the log result is visually prioritized.
 - If future firmware introduces additional device indicators, the design system will need a companion state spec update.

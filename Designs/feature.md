@@ -14,7 +14,7 @@ UX:
 setup: pair devices with phone (for first time)
 on home screen, listed all features. Tap on each feature, you can "set goals", "view history", "measure", "get suggestion", "consult professionals"
 set goals: open mobile app -> tap on a featre -> set a goal (can use AI to suggest a goal)
-Interaction model (buttons, app, voice, etc.): button on device (on/off), app indication of actions
+Interaction model (buttons, 3-color LED, app, voice, etc.): button on device (on/off), app indication of actions
 Low power mode: put system into low power mode when sensor become inactive (change less than 1% from last second's average)
 Interaction: user can only do one action at a time.
 
@@ -33,8 +33,19 @@ Key behaviors: user set the goal, tracks if user are burning enough fat
 Sensors: Acetone and CO2
 Outputs: Measurement normalized to the starting point of the measurement, it's measured multiple times through one session
 Key user flows: 
-1. Daily use: turn on the device -> open mobile app, tap on a feature -> wait till it shows ready (and also show animations how to do the measurement) -> Breath and hold for 10 seconds -> Blow into the device -> mobile app will show measureing -> wait until mobile app shows done -> tap on done -> repeat until your session is over -> tap on Finish and browse your visalized measurements and progress -> get advices (with potential purchase suggestion)
+Daily use: turn on the device -> open mobile app, tap on a feature -> wait till it shows ready (and also show animations how to do the measurement) -> Breath and hold for 10 seconds -> Blow into the device -> mobile app will show measureing -> wait until mobile app shows done -> tap on done -> repeat until your session is over -> tap on Finish and browse your visalized measurements and progress -> get advices (with potential purchase suggestion)
     During measurement, if the user stops befoe done, it will be considered as a cancel and no results will be shown or stored
+    
+Feature 3: Factory mode
+User value: good open box experience
+Key behavior: test the HW functionality at factory
+Key user flow: press the button for 10 seconds to turn on -> firmware automatically runs the HW functionality check, turn LED to orange -> report error logs over BLE -> turn LED to green if no error, turn LED to red on if there is error. -> press the button for 10 seconds to turn off 
+One time use
+
+Not User Facing Feature: HW-ID
+User value: automatically detect the type of VOC detected with different HW-ID
+Key behavior: the output will be organized based on supported HW-ID
+Key user flow: none.
 
 Accepetance criteria: consequent measurement from same source should be with 5% error
 

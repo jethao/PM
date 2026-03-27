@@ -10,6 +10,7 @@
 | v0.4 | 2026-03-23 | PM Agent | Revised PRD to reflect updated feature constraints around handheld industrial design, simplified mechanical architecture, and airflow conditioning before the sensors. Added explicit hardware, UX, technical, risk, assumption, and delivery requirements so the device form factor and sample path are implementation-ready. | Updated feature definition in `PM/Designs/feature.md` | Sections 1, 4, 5, 7, 10, 11, 13, 14 |
 | v0.5 | 2026-03-25 | PM Agent | Revised PRD to integrate the updated home-screen action model, one-action-at-a-time interaction rule, feature-level actions for set goals/view history/measure/get suggestions/consult professionals, and low-power behavior when sensor activity becomes effectively idle. Clarified the corresponding UX, firmware, and operational implications. | Updated feature definition in `PM/Designs/feature.md` | Sections 4, 5, 6, 7, 8, 10, 11, 13, 14 |
 | v0.6 | 2026-03-25 | PM Agent | Revised PRD in response to Reviewer Agent feedback. Defined the Phase 1 `consult professionals` action as a curated support directory and contact handoff, and added deterministic hysteresis and debounce rules for low-power entry and exit around the 1% threshold. | Reviewer Agent feedback in `PM/PRD/reviews.md` v0.9 | Sections 5, 6, 7, 8, 10, 11, 13, 14 |
+| v0.7 | 2026-03-27 | PM Agent | Revised PRD to incorporate the 3-color LED interaction model, manufacturing-only Factory mode, and internal HW-ID handling. Clarified consumer versus factory scope, one-time factory provisioning behavior, BLE error-log reporting, and the software, firmware, hardware, backend, and support implications of routing outputs by hardware profile and detected VOC type. | Updated feature definition in `PM/Designs/feature.md` | Sections 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14 |
 
 ## 1. Overview
 
@@ -17,9 +18,9 @@
 
 **Summary:** AirHealth is a connected consumer electronics system that measures breath-print biomarkers from a dedicated device, transfers results to a mobile app, tracks trends over time, and provides guidance tied to two initial health use cases: Oral & Dental Health and Fat Burning.
 
-**Product context:** The product consists of a handheld hardware breath-analysis device, a mobile app, BLE connectivity between device and phone, cloud storage for history and goals, and optional sharing to third-party health ecosystems. The physical device must be shaped for comfortable handheld use, with a simplified internal mechanical architecture and a controlled airflow path that conditions the sample before it reaches the sensors.
+**Product context:** The product consists of a handheld hardware breath-analysis device with a 3-color LED, a mobile app, BLE connectivity between device and phone, cloud storage for history and goals, and optional sharing to third-party health ecosystems. The physical device must be shaped for comfortable handheld use, with a simplified internal mechanical architecture and a controlled airflow path that conditions the sample before it reaches the sensors. The product also includes a manufacturing-only Factory mode and an internal HW-ID model so the team can validate hardware before shipment and organize outputs by supported hardware profile and detected VOC type.
 
-**Why this matters:** Users need a repeatable, easy-to-follow way to capture breath measurements, understand trends, and act on guidance without needing to interpret raw sensor data. The system must make a technically complex measurement feel simple, trustworthy, and recoverable when connectivity or setup is interrupted.
+**Why this matters:** Users need a repeatable, easy-to-follow way to capture breath measurements, understand trends, and act on guidance without needing to interpret raw sensor data. The system must make a technically complex measurement feel simple, trustworthy, and recoverable when connectivity or setup is interrupted, while also giving manufacturing and support a reliable way to verify hardware health and identify the device variant behind a given result or log.
 
 ## 2. Problem Statement
 
@@ -38,6 +39,8 @@ Why now: Consumers are increasingly comfortable with connected health devices, b
 - Store measurement history, goals, and progress in the cloud so users can review trends over time.
 - Provide understandable feedback and suggestions after a completed measurement session.
 - Support data sharing to third-party health apps where technically and commercially enabled.
+- Support a manufacturing-only Factory mode that runs a one-time hardware functionality check, reports BLE error logs, and confirms pass/fail status before consumer shipment.
+- Use HW-ID as internal metadata to route outputs, logs, and support diagnostics by supported hardware profile and detected VOC type.
 - Ensure the system clearly handles cancelation, interruption, offline states, and incomplete sessions.
 
 ### Non-Goals
@@ -47,6 +50,7 @@ Why now: Consumers are increasingly comfortable with connected health devices, b
 - Allowing simultaneous measurements or multi-user concurrent sessions on one device.
 - Creating a standalone device experience without the mobile app.
 - Building a full e-commerce platform inside the product. Product purchase suggestions may link out or deep-link, but checkout is out of scope.
+- Exposing Factory mode or HW-ID to consumer-facing UI, settings, or result screens.
 
 ## 4. Target Users and Use Cases
 
@@ -56,12 +60,19 @@ Why now: Consumers are increasingly comfortable with connected health devices, b
 - Users who want to monitor oral and dental-related indicators over time.
 - Users who want to understand fat-burning related trends during repeated breath sessions.
 
+### Internal users
+
+- Factory operators who need a one-time verification flow before shipment.
+- QA technicians who need clear pass/fail hardware confirmation and error logs.
+- Manufacturing and support teams who need HW-ID-based routing to group outputs by device variant or detected VOC type.
+
 ### Relevant contexts
 
 - At home, typically after brushing teeth for oral mode.
 - During a structured session when the user can follow app instructions without interruption.
 - In environments where BLE connectivity and phone access are available.
 - While holding a compact handheld device that must remain stable enough for guided mouth placement and repeated breathing steps.
+- During manufacturing and open-box verification, where authorized personnel need a one-time hardware check with immediate LED and BLE feedback.
 - In a home-screen workflow where the user chooses one feature card at a time and then selects an action such as `set goals`, `view history`, `measure`, `get suggestion`, or `consult professionals`.
 
 ### Key use cases
@@ -72,14 +83,17 @@ Why now: Consumers are increasingly comfortable with connected health devices, b
 - Performing a multi-step fat-burning session.
 - Reviewing trend history and progress.
 - Recovering from interruption, cancelation, or device/phone disconnect.
+- Running manufacturing verification and triaging hardware logs by HW-ID before the device reaches a consumer.
 
 ## 5. Feature Definition
 
-AirHealth measures breath-print data using a dedicated device and transfers the data to a phone app. The user can only measure one thing at a time. If another measurement is needed, the current session must be finished or canceled first.
+AirHealth measures breath-print data using a dedicated device and transfers the data to a phone app. The user can only measure one thing at a time. If another measurement is needed, the current session must be finished or canceled first. The device uses the app and a 3-color LED together for state feedback, but the consumer app remains the primary control surface.
 
 On the home screen, the app lists all available features as separate cards or tiles. Each feature card exposes the same core actions so the user can enter the product from the task they want to do, rather than navigating through a generic settings flow.
 
 In Phase 1, `consult professionals` is a curated support action, not an in-app booking system. It opens a feature-relevant directory of external educational and professional contact resources, such as websites, phone numbers, and support hours, with the user choosing whether to continue to any external destination.
+
+Factory mode is launch scope for manufacturing and QA, not a consumer-facing feature. It is entered through a long-press hardware gesture, runs a one-time device verification flow, and is used to confirm open-box readiness before the product reaches a user.
 
 ### Initial feature modes
 
@@ -95,6 +109,19 @@ In Phase 1, `consult professionals` is a curated support action, not an in-app b
 - Session behavior: the user breathes and holds for 10 seconds, then blows into the device, and repeats until the session is complete.
 - Output behavior: the app shows a session-relative `Fat Burn Delta` for each completed reading, expressed as signed percentage points relative to the first valid reading in that session. The first reading sets the session baseline at 0%, and repeated measurements within the session are shown as changes from that baseline. Cross-session comparison uses only the final session delta and the best delta reached in each completed session.
 
+**Feature 3: Factory Mode**
+- User value: provide a good open-box experience and reliable manufacturing verification.
+- Who uses it: authorized factory operators, QA technicians, and service/manufacturing tooling. It is not exposed in consumer UI.
+- Entry and exit: press and hold the device button for 10 seconds to enter Factory mode, and press and hold the device button for 10 seconds to exit. The mode is one-time use and is blocked after factory provisioning is complete.
+- Behavior: firmware automatically runs the hardware functionality check, turns the 3-color LED orange while the check is in progress, reports error logs over BLE, turns the LED green if no error is found, and turns the LED red if an error is found.
+- Scope: the Factory mode flow must be available at launch for manufacturing verification, but it must not be available to consumers after shipment or in normal app workflows.
+
+**Not user-facing feature: HW-ID**
+- User value: none directly; this is an internal routing and support identifier.
+- Product role: automatically detect the supported hardware profile and organize outputs based on HW-ID and detected VOC type so firmware, backend, analytics, manufacturing, and support can group records correctly.
+- Visibility: HW-ID is never shown in consumer UI, and the mobile app must not require it for consumer measurement flows.
+- Flow: none from the user perspective; the value is captured or inferred by firmware and used downstream for routing and diagnostics.
+
 ### Scope constraints inherited from the feature definition
 
 - A session may only track one mode at a time.
@@ -105,8 +132,12 @@ In Phase 1, `consult professionals` is a curated support action, not an in-app b
 - The device must be designed as a handheld product, and industrial design plus electrical component selection must fit the compact physical structure.
 - The internal architecture should minimize moving or serviceable mechanical parts, with passive structures preferred unless a later engineering review proves a part is required for hygiene, safety, or airflow control.
 - Airflow must be stabilized before it reaches the sensors, and the design must prevent direct user breath from impinging on the sensors.
+- The device interaction model includes the mobile app, the physical button, and a 3-color LED; the app remains the primary control surface for consumer flows.
+- The 3-color LED must provide immediate state feedback, including orange / green / red signaling in Factory mode, without exposing manufacturing-only details in consumer UX.
 - The device should enter low-power mode when sensor readings are effectively stable, defined as a change of less than 1% from the last second's average for at least 3 consecutive seconds, so the system conserves power during idle periods without interrupting a user-initiated action.
 - The device should exit low-power mode only after either a user/app action is received or sensor activity exceeds 2% change from the last second's average for 2 consecutive seconds, which creates a hysteresis band that prevents oscillation near the 1% threshold.
+- Factory mode is manufacturing-only launch scope, one-time use, and must be closed to normal consumer workflows after provisioning.
+- HW-ID is internal metadata that may be used by firmware, backend, analytics, manufacturing, and support systems to route outputs, but it must not alter the consumer action model or surface as a user-facing identifier.
 
 ## 6. End-to-End Experience
 
@@ -114,6 +145,15 @@ In Phase 1, `consult professionals` is a curated support action, not an in-app b
 
 - The user learns about the device through packaging, store listing, or app onboarding.
 - The product communicates that it is a guided breath analysis device with two initial modes and a trial period.
+
+### Manufacturing and factory verification
+
+- During manufacturing, authorized personnel place the device into Factory mode with the 10-second button hold.
+- Firmware automatically runs the hardware functionality check once Factory mode starts.
+- The 3-color LED shows orange while the check is running, green when the device passes, and red when the device fails.
+- Error logs are reported over BLE so factory tooling can capture them without opening the device.
+- Factory mode is one-time use and is not exposed in consumer onboarding, settings, or support flows.
+- HW-ID is captured or inferred during provisioning so downstream firmware, backend, analytics, manufacturing, and support systems can organize outputs by supported hardware profile and detected VOC type.
 
 ### Setup
 
@@ -123,6 +163,7 @@ In Phase 1, `consult professionals` is a curated support action, not an in-app b
 - App confirms successful connection and device readiness.
 - User selects one initial mode and sets a goal, optionally using AI-assisted suggestions.
 - The app presents the selected feature's action row or action sheet with `set goals`, `view history`, `measure`, `get suggestion`, and `consult professionals` so the user can continue from the feature they care about most.
+- The setup flow must not expose Factory mode or HW-ID to the consumer.
 
 ### Onboarding
 
@@ -137,6 +178,7 @@ In Phase 1, `consult professionals` is a curated support action, not an in-app b
 - Device remains the source of sensing and session control.
 - The physical measurement path must guide breath through a stable conditioning path before the sensors, so the app can assume a repeatable sample rather than direct breath impact.
 - App reflects live measurement progress, session status, and completion state.
+- The 3-color LED may provide redundant device-state feedback during measurement, but the app remains authoritative for consumer instructions.
 - While a session is active, the app blocks other feature actions, including goal edits, history mutations, suggestions that require a new measurement, and professional-consultation handoff flows that would conflict with the active session.
 
 ### Results and progress
@@ -243,6 +285,9 @@ The cloud entitlement service is the source of truth for subscription state. The
 15. The app must ensure the user can only perform one action at a time across setup, measurement, history review, suggestion generation, and professional-consultation entry points.
 16. The app must show a clear low-power state in response to sensor inactivity and must avoid interrupting a user-initiated session transition when entering or exiting that state.
 17. The app must surface the `consult professionals` directory in Phase 1 as an informational support flow for both feature modes, without transmitting account, breath, or result data to the external destination.
+18. The consumer app must not expose Factory mode entry, HW-ID values, or manufacturing-only logs in any consumer-facing screen, setting, or export flow.
+19. The software stack must persist Factory mode pass/fail results, BLE error logs, and HW-ID metadata for manufacturing, backend, analytics, and support workflows.
+20. The app and backend must treat HW-ID as an internal routing key so records can be grouped by supported hardware profile and detected VOC type without changing the consumer result model.
 
 ### Phase 1 sharing/export contract
 
@@ -300,6 +345,9 @@ The export contract is one completed session summary per session. Canceled, fail
 13. The device firmware must support a low-power state when sensor readings are effectively idle, defined as less than 1% change from the last second's average, and must resume measurement responsiveness when user action or sensor activity resumes.
 14. The device and app must preserve one-action-at-a-time behavior by rejecting concurrent session commands, queued feature actions, or conflicting mode changes until the current action is resolved.
 15. The device firmware must not enter low-power mode while a user-initiated measurement transition is in flight, and it must use hysteresis so low-power entry requires 3 consecutive seconds below the idle threshold while exit requires either user/app action or 2 consecutive seconds above the exit threshold.
+16. The device must include a 3-color LED that supports orange, green, and red states for Factory mode and other state feedback cues.
+17. The firmware must support a manufacturing-only Factory mode that is entered and exited with a 10-second button hold, runs exactly one hardware functionality check per device, and blocks re-entry after provisioning is complete.
+18. The device must report Factory mode error logs over BLE and must attach HW-ID metadata to factory and session outputs so downstream systems can route by hardware profile and detected VOC type.
 
 ## 8. System Behavior and States
 
@@ -313,6 +361,11 @@ The export contract is one completed session summary per session. Canceled, fail
 - Feature hub
 - Active oral session
 - Active fat-burning session
+- Factory mode
+- Factory check running
+- Factory pass
+- Factory fail
+- Factory locked
 - Measuring
 - Paused or interrupted
 - Low power
@@ -332,6 +385,12 @@ The export contract is one completed session summary per session. Canceled, fail
 - Ready to feature hub: user lands on the home screen where feature cards and action rows are visible.
 - Feature hub to guided setup: user selects a feature and then chooses a compatible action such as set goals, view history, measure, get suggestion, or consult professionals.
 - Ready to active session: user selects mode and starts guided measurement.
+- Powered off to Factory mode: authorized factory tooling performs the 10-second long press before consumer provisioning.
+- Factory mode to Factory check running: firmware begins the one-time hardware functionality check.
+- Factory check running to Factory pass: the device completes the check, reports no errors, and turns the LED green.
+- Factory check running to Factory fail: the device completes the check, reports one or more errors, and turns the LED red.
+- Factory pass or Factory fail to Factory locked: provisioning is complete and the one-time Factory mode flow is no longer available.
+- Factory locked to powered off: user performs the 10-second exit hold after the result is reported, and the device shuts down while retaining the one-time-use lock for future boots.
 - Active session to measuring: device confirms sensing has begun.
 - Measuring to complete: user completes the required steps and device validates the sample.
 - Measuring to canceled: user stops the session, closes the app, or aborts intentionally before completion.
@@ -351,6 +410,8 @@ The export contract is one completed session summary per session. Canceled, fail
 - The device is authoritative for live sensing, sample completion, and final session result generation.
 - The app is authoritative for user-facing state, local queuing, and entitlement-gated actions.
 - The cloud is authoritative for entitlement status and the final acceptance of synced results.
+- Factory mode is authoritative on the device and must not depend on app visibility or consumer sign-in to complete the hardware check.
+- LED state must align with the device-reported Factory pass/fail outcome, with orange for check-in-progress, green for pass, and red for fail.
 - If the device completes a session during a disconnect, the device result overrides any tentative app failure state once the session ID is reconciled.
 - Pending sync data must remain queued if entitlement is expired or temporarily unverifiable, and the queue may upload automatically once the backend confirms an eligible entitlement for that completed session.
 
@@ -368,6 +429,10 @@ The export contract is one completed session summary per session. Canceled, fail
 - User changes subscription state while offline.
 - Account sign-in mismatch occurs on a previously paired device.
 - Third-party health app integration is unavailable or permission is denied.
+- A consumer-owned device receives a long press that would otherwise enter Factory mode after provisioning is complete.
+- Factory mode reports a hardware failure and the BLE log transfer is interrupted.
+- The backend cannot associate a completed session or factory log with a supported HW-ID.
+- The 3-color LED indicates a fail state while the app is disconnected or offline.
 
 For every failure case, the app must show:
 - what happened
@@ -384,6 +449,8 @@ For every failure case, the app must show:
 - Result screens must show the measurement outcome, progress relative to history, and recommended next action.
 - Accessibility requirements include readable contrast, large tap targets, and clear non-color cues for state changes.
 - The `consult professionals` flow must be visually distinct from measurement and suggestion flows so the user understands it is a support handoff rather than a device interaction.
+- Factory mode must stay out of the consumer UX while still giving manufacturing and QA immediate pass/fail feedback through the LED and BLE log path.
+- HW-ID must not appear in consumer-facing UI, but support and manufacturing tools need a consistent place to surface it for diagnosis.
 
 ## 11. Technical and Operational Considerations
 
@@ -397,6 +464,8 @@ For every failure case, the app must show:
 - The one-action-at-a-time rule means the UI and firmware must coordinate state transitions carefully so users are never offered simultaneous conflicting actions, even when the app is backgrounded or the device is waking from low power.
 - Low-power entry must not create a false failure state or drop a session context when sensor activity is merely idle.
 - The `consult professionals` flow must not require additional PII, breath-data export, or payment state to function in Phase 1.
+- Factory mode requires a dedicated one-time provisioning latch, BLE log transport, and LED state mapping so hardware validation can happen without opening the enclosure.
+- HW-ID must be available to firmware, backend, analytics, manufacturing, and support systems as a routing key, but the consumer app should treat all supported hardware as the same product experience.
 - Packaging, manufacturing, and cost targets must support the target retail price.
 - The product must avoid presenting results as diagnostic unless approved by regulatory and legal review.
 
@@ -413,6 +482,7 @@ For every failure case, the app must show:
 - 90% of paid or trial-active users complete a session without support intervention, measured on rolling 30-day windows.
 - 90% of users can correctly identify the available action for a feature card on first exposure in usability testing, measured during pre-launch validation.
 - 85% of low-power transitions recover to an actionable state within 5 seconds once user activity resumes, measured during device validation.
+- 100% of production units record a completed Factory mode pass/fail outcome and HW-ID association before shipment, measured across manufacturing release lots.
 - In controlled validation with at least 50 participants and 150 repeated-session pairs, 90% of consecutive same-source oral measurements remain within 5% variance within a 30-day validation window.
 - In controlled validation with at least 50 participants and 150 repeated-session pairs, 90% of repeated Fat Burning readings from the same device/session pattern remain within 5% variance within a 30-day validation window.
 
@@ -428,6 +498,9 @@ For every failure case, the app must show:
 - Health Connect export success rate.
 - Entitlement-check-pending/offline incidence and recovery time.
 - Subscription prompt view rate and post-prompt conversion rate.
+- Factory pass/fail rate by HW-ID.
+- Factory BLE log capture success rate.
+- HW-ID routing coverage across manufacturing, backend, analytics, and support workflows.
 
 ## 13. Risks, Assumptions, and Open Questions
 
@@ -443,6 +516,9 @@ For every failure case, the app must show:
 - If airflow stabilization is not validated early, the product may appear to work in software while producing noisy or inconsistent breath-print data in real use.
 - If the one-action-at-a-time behavior is not enforced consistently, the product may feel confusing or stateful in a way that undermines trust in the measurement results.
 - Low-power behavior could create support issues if users interpret idle sensor reduction as a failure rather than a power-saving mode.
+- Factory mode could be accidentally exposed to consumers if the one-time provisioning latch or long-press guard is not enforced consistently.
+- HW-ID misclassification could cause support, analytics, or manufacturing reports to group the wrong hardware variant with a result or error log.
+- BLE error-log transfer during Factory mode could fail and leave manufacturing without enough evidence to triage a bad unit unless logs are buffered.
 
 ### Assumptions
 
@@ -455,6 +531,8 @@ For every failure case, the app must show:
 - The home-screen feature cards can support the same action vocabulary across modes without creating a heavy navigation hierarchy.
 - Low-power mode can be implemented as a distinct state that preserves session context and resumes quickly when user activity returns.
 - A curated directory plus external contact handoff is sufficient for `consult professionals` in Phase 1, with richer referral or booking workflows deferred to later phases.
+- Factory mode can be consumed once per device and then locked out without requiring a consumer-facing reset path.
+- Every supported hardware profile has a stable HW-ID mapping that downstream systems can use without changing the consumer measurement experience.
 
 ### Open questions
 
@@ -462,6 +540,8 @@ For every failure case, the app must show:
 - What guardrails are required for AI-generated goals and recommendations?
 - Does the industrial design require any hygienic insert, removable mouth-contact component, or disposable accessory to satisfy airflow, sanitation, or comfort needs?
 - What tolerance and calibration strategy is required for the stabilized airflow path to support the 5% same-source consistency target?
+- What is the exact set of supported HW-ID values, and which firmware or backend components own the mapping table?
+- How should manufacturing recover from a Factory-mode failure if BLE log transfer is unavailable on the first attempt?
 
 ## 14. Scope and Phased Delivery
 
@@ -478,6 +558,8 @@ For every failure case, the app must show:
 - Outbound sharing of completed session summaries to Apple Health on iOS and Health Connect on Android.
 - Cached entitlement handling with read-only fallback and queued sync recovery.
 - Low-power device behavior during sensor inactivity with fast resume to actionable states.
+- Manufacturing-only Factory mode with one-time use, 3-color LED pass/fail signaling, and BLE error-log reporting.
+- HW-ID capture and downstream routing for firmware, backend, analytics, manufacturing, and support use.
 - Handheld industrial design with a compact enclosure, stable grip, and sensor/sample path layout that supports the approved measurement workflows.
 - Passive airflow conditioning or an equivalently simple internal mechanism that prevents direct breath from hitting sensors.
 
@@ -488,6 +570,7 @@ For every failure case, the app must show:
 - Direct Oura, Fitbit, and similar partner integrations.
 - More advanced longitudinal analytics and comparison views.
 - Optional refinement of enclosure serviceability or hygiene accessories if Phase 1 validation shows the handheld sample path needs them.
+- Consumer-visible Factory mode controls or HW-ID display are not planned for later phases and remain internal-only.
 
 ### Excluded from Phase 1
 
