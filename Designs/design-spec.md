@@ -3,7 +3,7 @@
 ## 1. Overview
 
 - Feature name: AirHealth connected breath analysis experience
-- Design objective: Define a Figma-ready product experience for pairing, guided breath measurement, results review, progress tracking, entitlement states, and platform sharing across the two approved modes.
+- Design objective: Define a Figma-ready product experience for pairing, feature-card task selection, guided breath measurement, results review, progress tracking, entitlement states, low-power behavior, support-directory access, and platform sharing across the two approved modes.
 - Source inputs used: Approved PRD in `PM/PRD/PRD.md`, feature definition in `PM/Designs/feature.md`
 - Summary of the user experience being designed: A user pairs a handheld breath-analysis device to a mobile app, selects one of two modes, follows guided measurement instructions, reviews a normalized result and progress over time, and manages trial/subscription and sharing states when applicable.
 
@@ -13,11 +13,15 @@
 
 - The product has two initial modes: Oral & Dental Health and Fat Burning.
 - The user can only run one measurement session at a time.
+- The user can only run one action at a time across measurement, goal editing, suggestion generation, history mutation, and support entry.
 - The mobile app is the primary experience surface.
 - Phase 1 sharing is limited to Apple Health on iOS and Health Connect on Android.
 - The system must handle paired, disconnected, ready, active session, complete, canceled, failed, trial active, paid active, expired/read-only, and entitlement-check-pending/offline states.
 - The app must support a 60-day trial followed by a $5.99 monthly subscription.
 - The device is a handheld product with a compact enclosure, minimal moving parts, and an airflow path that conditions the sample before it reaches the sensors.
+- The home screen presents each feature as a task hub with `set goals`, `view history`, `measure`, `get suggestion`, and `consult professionals`.
+- `consult professionals` is a Phase 1 external educational and support directory for both features.
+- The device enters low-power mode only after 3 consecutive seconds below the 1% idle threshold and exits low-power mode only after explicit user/app action or 2 consecutive seconds above the exit threshold.
 
 ### Relevant inputs from `PM/Designs/feature.md`
 
@@ -40,6 +44,7 @@
 - Recommendation content is framed as wellness guidance and can link out, but checkout remains outside the product.
 - The handheld industrial design will likely use a fixed mouth-contact or air-intake region rather than a complex mechanical assembly, unless later engineering validation proves a removable hygienic part is required.
 - If a removable hygienic part is introduced later, it should be passive and user-replaceable, not a moving or actuated mechanism.
+- The feature-card action row is visible on the feature detail surface and may also be pinned on Home when space allows, but the same action vocabulary must remain consistent in both places.
 
 ### Unresolved ambiguities that affect design
 
@@ -47,6 +52,7 @@
 - The PRD allows cached entitlement behavior during backend unavailability, but the exact backend error copy remains a product content decision.
 - The PRD defines export payload fields, but partner-specific UI permissions and copy still need final legal/privacy review before release.
 - The PRD intentionally leaves open whether the handheld air path needs a removable hygienic insert or disposable accessory.
+- The PRD defines the support-directory behavior, but the exact content source, taxonomy, and locale coverage of the curated directory still need operational definition.
 
 ## 3. Experience Architecture
 
@@ -54,20 +60,25 @@
 
 - First launch onboarding
 - Device pairing flow
-- Home screen measurement entry
+- Home screen feature-card hub
 - History and trends
 - Goals setup and edit
+- Suggestion request and response
+- Consult professionals directory
 - Subscription/paywall surfaces
 - Sharing settings
 
 ### Major flows
 
 - Pair device and complete first setup
-- Select a mode and set a goal
+- Select a feature and choose an action
+- Set a goal from the feature hub
 - Perform Oral & Dental Health measurement
 - Perform Fat Burning measurement
 - Review results and progress
+- Open `consult professionals` and hand off to an external resource
 - Handle trial, entitlement, and read-only states
+- Enter and exit low-power readiness without losing context
 - Share completed sessions to Apple Health or Health Connect
 - Review handheld device shell, grip, button, and sample-path experience
 
@@ -76,10 +87,12 @@
 - Mobile app onboarding screens
 - Home/dashboard
 - Pairing sheet and device discovery
-- Mode selection and goal setup
+- Feature detail/task hub and goal setup
 - Guided measurement screen
 - Result summary screen
 - History detail and trend screen
+- Suggestion surface
+- Consult professionals directory and external handoff notice
 - Subscription state screen
 - Sharing permissions and export summary screen
 - Error and recovery dialogs
@@ -90,15 +103,19 @@
 - BLE pairing and reconnect state are shown in-app.
 - Session start, live measurement, completion, cancellation, and failure are driven by device/app state sync.
 - The app is authoritative for instructions, result presentation, and entitlement-gated actions.
+- The app is also authoritative for the feature-card action hub and for disabling conflicting actions while one action is active.
 - The device enclosure and sample path must make the handheld experience feel stable and obvious, while still protecting sensor accuracy through airflow conditioning.
+- The device firmware is authoritative for low-power entry and exit, while the app must communicate that state without implying failure.
 
 ### Critical system states
 
 - Unpaired
 - Paired but disconnected
 - Paired and ready
+- Feature hub active
 - Active session
 - Measuring
+- Low power
 - Complete
 - Canceled
 - Failed
@@ -111,10 +128,14 @@
 ### User-visible transitions
 
 - Unpaired to paired after successful BLE handshake
-- Ready to measuring after user begins a guided session
+- Paired and ready to feature hub after successful setup
+- Feature hub to measuring after the user chooses `measure`
+- Feature hub to history, goals, suggestion, or support after the user chooses a single action
 - Measuring to complete after device confirms a valid sample
 - Measuring to canceled after user aborts or exits
 - Measuring to failed after disconnect, invalid sample, or sensor issue
+- Ready to low power after the firmware idle threshold is met
+- Low power to ready after explicit wake or above-threshold sensor activity
 - Trial active or paid active to expired/read-only after entitlement lapses
 - Temporary access to read-only mode after the cached entitlement window becomes stale
 - Handheld setup to measurement-ready after the user powers on the device, grips it naturally, and the app confirms the form factor is ready for a guided session
@@ -138,7 +159,22 @@
 - Alternate paths: Permission denied, device not found, wrong device, pairing timeout.
 - Recovery paths: Retry discovery, re-request permission, go back to pairing, or defer setup and continue as read-only if entitlement state requires it.
 
-### Flow 2: Oral & Dental Health measurement
+### Flow 2: Feature-card task hub
+
+- User goal: Choose the right next action from a feature without navigating through unrelated settings.
+- Preconditions: Paired device or accessible read-only history state, Home visible, at least one feature card available.
+- Trigger: User taps a feature card from Home.
+- Steps in sequence:
+  1. User lands on the feature detail or expanded feature card surface.
+  2. App shows the action set for that feature: `set goals`, `view history`, `measure`, `get suggestion`, and `consult professionals`.
+  3. App enables only actions allowed in the current entitlement, device, and session state.
+  4. User chooses one action and the rest of the action row becomes disabled until that flow resolves.
+- Expected system responses: The user always sees one consistent action vocabulary, and the app never presents simultaneous conflicting actions as available.
+- Exit states: Goal edit flow, measurement flow, history flow, suggestion flow, support-directory flow, or blocked state with explanation.
+- Alternate paths: Read-only mode, temporary access, disconnected device, active session already in progress.
+- Recovery paths: Refresh device status, return to Home, or choose a non-blocked action.
+
+### Flow 3: Oral & Dental Health measurement
 
 - User goal: Capture a single oral session and understand the result relative to baseline.
 - Preconditions: Paired device, oral mode selected, device ready, user has an eligible entitlement state.
@@ -155,7 +191,7 @@
 - Alternate paths: User stops early, device disconnects, sensor error, cached entitlement blocks a new start.
 - Recovery paths: Retry after error, reconnect device, or resume as read-only if the session cannot start.
 
-### Flow 3: Fat Burning measurement
+### Flow 4: Fat Burning measurement
 
 - User goal: Capture repeated readings in one session and see whether progress is moving toward a target.
 - Preconditions: Paired device, fat mode selected, device ready, valid entitlement state.
@@ -172,7 +208,22 @@
 - Alternate paths: User ends early, device disconnects, sample invalid, or target not set.
 - Recovery paths: Reconnect and retry if the session has not been finalized, or return to Home if the session is lost.
 
-### Flow 4: Trial, entitlement, and read-only behavior
+### Flow 5: Consult professionals
+
+- User goal: Find relevant external educational or professional support resources without leaving the product confused about what will be shared.
+- Preconditions: User is on a feature card, result screen, or history detail screen; no conflicting action is active.
+- Trigger: User taps `consult professionals`.
+- Steps in sequence:
+  1. App opens a feature-specific directory with curated links, phone numbers, and support hours.
+  2. App labels the flow as informational support and explains that no breath, result, or account data will be transmitted.
+  3. User selects an external destination.
+  4. App shows an external-handoff notice before opening the destination.
+- Expected system responses: The support directory feels distinct from measurement and suggestion flows, and the handoff is explicit before the user leaves AirHealth.
+- Exit states: External handoff complete, support directory dismissed, or external destination unavailable.
+- Alternate paths: Read-only mode, temporary access, missing locale-specific content, blocked because another action is already active.
+- Recovery paths: Return to the feature hub, retry with another resource, or open generic non-localized support content if no localized match exists.
+
+### Flow 6: Trial, entitlement, and read-only behavior
 
 - User goal: Understand whether they can measure now, view history, or only review past data.
 - Preconditions: Account exists and the app can verify or cache entitlement state.
@@ -188,7 +239,7 @@
 - Alternate paths: Backend unavailable, offline launch, expired subscription, payment issue.
 - Recovery paths: Refresh entitlement, sign in again, or restore paid status.
 
-### Flow 5: Share completed session summary
+### Flow 7: Share completed session summary
 
 - User goal: Export a completed result to Apple Health or Health Connect.
 - Preconditions: Session is complete, destination permission is granted or requestable.
@@ -202,6 +253,21 @@
 - Exit states: Export success, export failed, permission denied.
 - Alternate paths: Unsupported platform, partial permission, sync pending.
 - Recovery paths: Retry export, return to sharing settings, or dismiss without losing the local result.
+
+### Flow 8: Low-power readiness and wake
+
+- User goal: Understand that the device is idle but still healthy, and resume quickly without losing context.
+- Preconditions: Device paired, no measurement transition in flight, sensor readings effectively idle.
+- Trigger: Firmware crosses the 3-second below-threshold idle rule, or a wake event occurs from user/app action or renewed sensor activity.
+- Steps in sequence:
+  1. Device enters low power after the idle threshold is satisfied.
+  2. App shows a low-power-ready state rather than an error state.
+  3. User taps a feature action or the device senses above-threshold activity.
+  4. Firmware exits low power using the hysteresis rule and the app returns to ready or measuring.
+- Expected system responses: The product never chatters between ready and low power, and no wake transition looks like a disconnect or failure.
+- Exit states: Ready, measuring, or low-power-ready.
+- Alternate paths: Noisy sensor readings near threshold, wake without valid entitlement, wake during reconnect.
+- Recovery paths: Retry wake, reconnect device, or show explanatory low-power help text.
 
 ## 5. Screen and Interaction Specification
 
@@ -229,12 +295,12 @@
 
 ### Home dashboard
 
-- Purpose: Give a single place to start measurement, view current status, and reach history or settings.
-- Content requirements: Connected device status, entitlement state, mode cards, last result preview, and next recommended action.
-- Controls and actions: Start session, open mode detail, view history, manage subscription.
-- Information hierarchy: Current readiness, then available actions, then recent progress.
-- User feedback: Disabled start controls when entitlement or device state blocks measurement.
-- State behavior: Home must reflect ready, disconnected, temporary access, and read-only states without ambiguity.
+- Purpose: Give a single place to select a feature and then choose one allowed action from that feature's task hub.
+- Content requirements: Connected device status, entitlement state, mode cards, action row or action sheet, last result preview, next recommended action, and low-power-ready status when applicable.
+- Controls and actions: Open feature hub, `set goals`, `view history`, `measure`, `get suggestion`, `consult professionals`, manage subscription.
+- Information hierarchy: Current readiness, then feature/action availability, then recent progress.
+- User feedback: Disabled or deferred actions must explain whether the block comes from entitlement, device state, low-power wake, or one-action-at-a-time locking.
+- State behavior: Home must reflect ready, disconnected, low-power-ready, temporary access, and read-only states without ambiguity.
 - Dependencies: Device state, entitlement state, cached history.
 - Accessibility considerations: Clear labels for disabled actions and focus order that follows task priority.
 
@@ -263,19 +329,19 @@
 ### Result summary screen
 
 - Purpose: Show the completed score, progress, and recommended next step.
-- Content requirements: Primary result value, baseline or target reference, trend sparkline, goal achieved status, sharing action, history link.
-- Controls and actions: Share, save, view trend details, retake if allowed.
+- Content requirements: Primary result value, baseline or target reference, trend sparkline, goal achieved status, sharing action, history link, and the same feature-specific next-action choices the user can take after reviewing the result.
+- Controls and actions: Share, save, view trend details, retake if allowed, `get suggestion`, `consult professionals`.
 - Information hierarchy: Result first, then progress, then actions.
 - User feedback: Result only appears after validated completion.
-- State behavior: Oral and fat results use different semantics but share a consistent structure.
+- State behavior: Oral and fat results use different semantics but share a consistent structure, and the available next actions must return the user to the same feature context they started from.
 - Dependencies: Session type, stored history, entitlement status.
 - Accessibility considerations: Numeric results must have text labels in addition to charts.
 
 ### History and trend detail
 
 - Purpose: Let the user see long-term progression and prior sessions.
-- Content requirements: Timeline, filters by mode, baseline marker, summary cards.
-- Controls and actions: Change range, open session detail, export/share from completed sessions.
+- Content requirements: Timeline, filters by mode, baseline marker, summary cards, and support-oriented next actions when relevant to the selected feature.
+- Controls and actions: Change range, open session detail, export/share from completed sessions, `consult professionals`.
 - Information hierarchy: Latest result and trend trendline first, drill-down second.
 - User feedback: Read-only history remains visible even in temporary access or read-only mode.
 - State behavior: No editable controls in read-only mode.
@@ -304,6 +370,17 @@
 - Dependencies: Platform permissions and supported destination schema.
 - Accessibility considerations: Use simple language for data-sharing disclosure.
 
+### Consult professionals directory
+
+- Purpose: Provide a safe, clearly external support directory that helps users find relevant educational and professional resources by feature.
+- Content requirements: Feature-specific directory list, resource type, short description, support hours if known, locale filtering message, and explicit `no health data shared` notice.
+- Controls and actions: Open resource, return to feature, filter if available.
+- Information hierarchy: Safety/context notice first, recommended resources second, secondary metadata third.
+- User feedback: External-handoff notice before any external website, phone app, or contact method opens.
+- State behavior: Available in trial active, paid active, temporary access, and read-only states; disabled during active measurement or any conflicting in-progress action.
+- Dependencies: Feature context, locale availability, external destination health.
+- Accessibility considerations: Resources must be scannable, with link purpose clearly labeled for screen readers.
+
 ## 6. States and Conditions
 
 ### Default states
@@ -313,6 +390,7 @@
 
 ### Active states
 
+- Feature action in progress: The chosen action owns the UI and the rest of the feature actions are disabled.
 - Measuring oral: The app shows oral instructions and progress.
 - Measuring fat: The app shows the repeated-reading coach and current/best delta.
 
@@ -322,6 +400,7 @@
 - Entitlement verification
 - Cloud sync after session completion
 - Export to health platforms
+- Low-power wake handshake
 
 ### Connected and disconnected states
 
@@ -338,6 +417,7 @@
 ### Warning states
 
 - Temporary access
+- Low-power ready
 - Battery low before session start
 - Goal not set
 
@@ -348,6 +428,7 @@
 - Invalid sample
 - Device disconnected mid-session
 - Export failed
+- External support resource unavailable
 - Entitlement unavailable
 
 ### Recovery states
@@ -355,6 +436,7 @@
 - Retry pairing
 - Reconnect device
 - Retry export
+- Wake from low power
 - Refresh entitlement
 
 ### Unsupported states
@@ -373,10 +455,13 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - App offline: Permit viewing synced history, cache local results, and delay uploads.
 - Partial completion: Never store a partial session as complete, and never show a result card as final.
 - Interrupted flows: If the user closes the app during a live measurement, resume only if the device still reports the same active session ID.
+- One-action conflict: If the user tries to launch another task from the feature hub while one action is active, explain which action is in progress and what must finish or be canceled first.
 - Permission denial: Explain why Bluetooth or health export permissions are needed and offer a retry path.
 - Firmware mismatch: Block measurement start and explain that device software must be updated before use if the device reports incompatibility.
 - Account mismatch: Warn clearly when the signed-in account differs from the account that owns synced history or subscription access.
 - Unavailable hardware: If the required sensor set is unavailable or reports failure, block the mode and preserve history access.
+- Low-power chatter risk: Use the hysteresis rule so the UI does not flicker between ready and low-power-ready when readings hover near the threshold.
+- External support outage: If a professional-support destination fails to open, keep the user in AirHealth and offer another resource rather than dropping them into a dead-end state.
 - Timeout and retry behavior: Offer one explicit retry path before returning to Home.
 - State mismatch between app and device: Treat the device as authoritative for live session result, and the app as authoritative for UI recovery and queued sync.
 
@@ -389,12 +474,26 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Design scope: Industrial design, enclosure geometry, mouth-contact region, airflow path, button placement, and any visible indicator surfaces that support the handheld experience.
 - Relevant PRD requirements: Handheld form factor, minimal mechanical parts, airflow stabilization before the sensors, no direct breath impact on sensors, $199 retail target.
 - Hardware touchpoints: Device shell, grip area, power button, mouth-contact region, internal sample-conditioning path, sensor chamber.
-- Software touchpoints: Device readiness state, measurement start instructions, live measurement progress, error messaging when airflow or warm-up is not ready.
+- Software touchpoints: Device readiness state, low-power-ready state, measurement start instructions, live measurement progress, error messaging when airflow or warm-up is not ready.
 - Interaction spec: The design should make the user path obvious: hold, power on, follow the app, place mouth or blow into the intake region, and rely on the device to condition airflow before sensing. No flow should require the user to manipulate internal parts.
 - State and behavior spec: The device should feel ready when handheld, visibly state when it is measuring or warming up, and clearly reflect when a sample is invalid because the breath path or readiness state is not within spec. The intake orientation should be visually and tactilely obvious so the user does not aim breath directly at exposed sensors.
 - Edge cases: Grip instability, blocked airflow inlet, wet or obstructed mouth-contact area, sensor warm-up delay, sample inconsistency caused by direct breath impingement, passive hygienic accessory not seated if one is introduced later.
 - Acceptance criteria: The user can hold the device comfortably during the full measurement flow, the measurement path is understandable without exposing sensors directly, and the design does not depend on moving parts to guide breath into the sensors.
-- Success metrics: Handheld setup comprehension, measurement initiation success, airflow-related failure rate, user comfort feedback, and reduction in support contacts related to device handling.
+- Success metrics: Handheld setup comprehension, measurement initiation success, airflow-related failure rate, low-power wake comprehension, user comfort feedback, and reduction in support contacts related to device handling.
+
+### Feature action hub
+
+- Objective: Make each feature card act like a predictable task hub instead of a loose collection of separate screens.
+- User value: Users can choose their next task quickly from the same mental model regardless of feature mode.
+- Design scope: Home card, expanded feature surface, result-return actions, blocked-action states, and one-action-at-a-time locking.
+- Relevant PRD requirements: Home-screen feature cards, task-hub actions for goals/history/measure/suggestion/support, and one-action-at-a-time enforcement.
+- Hardware touchpoints: Device readiness, low-power-ready indication, active-session lock.
+- Software touchpoints: Home, feature detail, result summary, history detail, entitlement gating, action locking.
+- Interaction spec: The same action vocabulary must appear in a consistent order, with one primary action visually emphasized according to current state. When one action starts, the rest become visibly unavailable rather than silently disappearing.
+- State and behavior spec: Ready state shows the full action set; active measurement shows only the in-progress measurement context; read-only and temporary-access states preserve history and support actions while blocking measurement and goal edits as required by entitlement.
+- Edge cases: Conflicting actions, disconnected device, stale entitlement, low-power wake delay, no history yet.
+- Acceptance criteria: Users can identify the allowed action set for a feature, understand why blocked actions are unavailable, and return to the same feature context after completing a task.
+- Success metrics: First-try action selection accuracy, blocked-action comprehension, and action-to-completion rate by feature.
 
 ### Oral & Dental Health
 
@@ -438,6 +537,34 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Acceptance criteria: Users can always tell why a session is blocked, what they can still do, and what action restores measurement access.
 - Success metrics: Entitlement-screen comprehension, blocked-session help click-through, restore-purchase success rate, support contact reduction for access confusion.
 
+### Consult professionals
+
+- Objective: Provide a clearly bounded support handoff that helps users find external educational or professional resources without implying diagnosis or hidden data sharing.
+- User value: Users can get next-step support from the context of a feature without losing trust in what AirHealth is and is not doing.
+- Design scope: Feature-card entry, result/history entry, support directory, external-handoff notice, unavailable-resource fallback.
+- Relevant PRD requirements: Phase 1 informational directory only, both features supported, no account/result/breath-data transmission, available even in temporary access and read-only states.
+- Hardware touchpoints: None, aside from action disabling when an active measurement or wake transition is in progress.
+- Software touchpoints: Home task hub, result summary, history detail, locale filtering, external destination handoff.
+- Interaction spec: The support directory must look different from measurement and suggestion content, and every exit to an external destination must pass through a short disclosure state first.
+- State and behavior spec: Available in non-measurement contexts for both features; disabled while another action is active; if no localized content exists, the screen falls back to generic educational support rather than going empty.
+- Edge cases: No localized resource, dead external link, external phone app unavailable, user in read-only mode, user returns from an external resource.
+- Acceptance criteria: Users can open the directory from both features, understand that no health data is shared, and complete an external handoff without mistaking it for in-app booking or medical advice.
+- Success metrics: Directory open rate, external-handoff completion rate, dead-link recovery rate, and support-flow comprehension.
+
+### Low-power readiness and wake
+
+- Objective: Communicate idle power-saving behavior without making the device appear broken or disconnected.
+- User value: The device feels battery-conscious but still responsive and trustworthy.
+- Design scope: Home/dashboard ready states, wake messaging, measurement start from low power, low-power-ready banner, and hysteresis-safe UI transitions.
+- Relevant PRD requirements: Low-power entry after 3 consecutive seconds below 1% change, exit after user/app action or 2 consecutive seconds above 2% change, no interruption of active measurement transitions.
+- Hardware touchpoints: Firmware low-power state, wake trigger, readiness indicator.
+- Software touchpoints: Home status banner, feature-hub action gating, measurement start CTA, reconnect/help messaging.
+- Interaction spec: Low power must be presented as a normal idle-ready state, not an error. Waking the device should feel like a short readiness step rather than a reconnect flow unless BLE is actually lost.
+- State and behavior spec: The UI shows `Low-power ready` when idle, prevents measurement-start confusion during wake, and avoids flicker by matching the hysteresis band used by firmware.
+- Edge cases: Threshold-hovering noise, wake while another action is selected, stale entitlement during wake, wake timeout.
+- Acceptance criteria: Users can tell the difference between low power and failure, can wake the device without leaving the feature context, and do not experience visible state chatter near the threshold.
+- Success metrics: Low-power wake success rate, false-failure perception rate, wake-to-action time, and support-contact reduction for idle-state confusion.
+
 ### Sharing to Apple Health and Health Connect
 
 - Objective: Export completed session summaries to platform health ecosystems without exposing raw or private data.
@@ -460,6 +587,9 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - The app clearly distinguishes Oral & Dental Health and Fat Burning result semantics.
 - The app labels access states as `Temporary access` and `Read-only mode` when entitlement verification is unavailable or stale.
 - The user can always see whether history is available, whether new sessions are blocked, and what action can restore access.
+- The feature-card task hub always shows one consistent action vocabulary, with blocked actions explained rather than hidden.
+- The `consult professionals` flow is clearly labeled as an external support directory and never implies in-app booking or data sharing.
+- Low-power-ready is visually distinct from disconnected or failed states, and wake transitions do not flicker or strand the user.
 - Completed session sharing excludes raw sensor data, purchase recommendations, and account identifiers.
 - The design uses the same core layout and status grammar across all states so Figma variants can be built efficiently.
 
@@ -471,7 +601,10 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Fat session completion rate with at least 1 valid reading.
 - Repeat session rate within 7 and 30 days.
 - Error recovery rate for pairing, disconnect, and export failures.
+- First-try action selection rate from the feature hub.
+- Consult-professionals handoff completion rate.
 - Entitlement comprehension rate, measured by users correctly identifying whether they can measure now.
+- Low-power wake success rate within the first attempt.
 - Sharing success rate on supported platforms.
 - Support contact rate for subscription and blocked-access confusion.
 
@@ -482,8 +615,10 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Onboarding and permissions
 - Pairing
 - Home and mode selection
+- Feature-card action hub
 - Oral measurement
 - Fat measurement
+- Consult professionals directory
 - Results and history
 - Subscription and entitlement
 - Sharing settings
@@ -494,20 +629,25 @@ For each state, the UI must show what happened, what is blocked, and the next re
 ### States that require separate screens or variants
 
 - Unpaired, paired, ready, disconnected
+- Feature hub ready, feature action locked, low-power-ready, waking
 - Measuring oral, measuring fat, complete, canceled, failed
 - Trial active, paid active, temporary access, read-only mode
 - Permission granted, permission denied
 - Export success, export failure
+- External support handoff notice and external-resource-unavailable
 
 ### Components likely needed
 
 - Status banner
 - Mode card
+- Action chip row
 - Score card
 - Step coach
 - Progress bar
 - Trend sparkline
 - Error callout
+- Low-power-ready banner
+- External-handoff notice
 - Primary CTA button
 - Secondary CTA button
 - Permission modal
@@ -537,8 +677,11 @@ For each state, the UI must show what happened, what is blocked, and the next re
 ### Prototyping needs
 
 - Pairing to ready transition
+- Feature hub to action lock transition
 - Oral measurement to complete transition
 - Fat measurement repeated-reading loop
+- Low-power ready to wake to measure transition
+- Consult professionals directory to external handoff
 - Expired entitlement to read-only mode transition
 - Share permission grant and failure paths
 
@@ -547,6 +690,8 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Final visual system and brand treatment
 - Final copy for trial expiration and payment recovery
 - Exact legal text for health sharing disclosures
+- Final taxonomy and sourcing rules for the curated professional-support directory
+- Final copy for low-power-ready and wake messaging
 - Whether any device indicator beyond power state will ship in Phase 1
 
 ## 12. Open Questions and Design Risks
@@ -555,4 +700,7 @@ For each state, the UI must show what happened, what is blocked, and the next re
 - Final legal and privacy review may require copy changes for health sharing, subscription, and wellness claims.
 - The lack of a device display means the mobile app must carry all instructional clarity; this is a usability risk if content becomes too dense.
 - Cached entitlement messaging must stay consistent across app surfaces to avoid support confusion.
+- The new feature-card action hub increases Home-screen complexity and will need careful visual prioritization to avoid choice overload.
+- The support-directory experience depends on content operations and external links staying fresh enough to remain trustworthy.
+- Low-power-ready messaging must stay distinct from disconnect or failure states, or users may misread a healthy idle device as broken.
 - If future firmware introduces additional device indicators, the design system will need a companion state spec update.
